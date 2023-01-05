@@ -12,8 +12,18 @@ import androidx.core.content.ContextCompat
 import com.mapbox.api.directions.v5.models.Bearing
 import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.bindgen.Expected
+import com.mapbox.bindgen.Value
+import com.mapbox.common.Cancelable
 import com.mapbox.geojson.Point
 import com.mapbox.maps.EdgeInsets
+import com.mapbox.maps.LayerPosition
+import com.mapbox.maps.MapboxMap
+import com.mapbox.maps.RenderedQueryGeometry
+import com.mapbox.maps.RenderedQueryOptions
+import com.mapbox.maps.Style
+import com.mapbox.maps.extension.style.expressions.dsl.generated.interpolate
+import com.mapbox.maps.extension.style.expressions.dsl.generated.literal
+import com.mapbox.maps.extension.style.expressions.dsl.generated.switchCase
 import com.mapbox.maps.plugin.LocationPuck2D
 import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.gestures.gestures
@@ -48,6 +58,8 @@ import com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer
 import com.mapbox.navigation.ui.maneuver.api.MapboxManeuverApi
 import com.mapbox.navigation.ui.maneuver.view.MapboxManeuverView
 import com.mapbox.navigation.ui.maps.NavigationStyles
+import com.mapbox.navigation.ui.maps.building.api.MapboxBuildingsApi
+import com.mapbox.navigation.ui.maps.building.view.MapboxBuildingView
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
 import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
 import com.mapbox.navigation.ui.maps.camera.lifecycle.NavigationBasicGesturesHandler
@@ -106,7 +118,17 @@ class TurnByTurnExperienceActivity : AppCompatActivity() {
 
     private companion object {
         private const val BUTTON_ANIMATION_DURATION = 1500L
+
+        private const val LANDMARKS_SOURCE_ID = "LANDMARKS_SOURCE_ID"
+        private const val LANDMARKS_LAYER_ID = "LANDMARKS_LAYER_ID"
+        private const val LANDMARK_HOVER_FEATURE = "hover"
     }
+
+    private val buildingsApi by lazy { MapboxBuildingsApi(binding.mapView.getMapboxMap()) }
+    private val buildingView = MapboxBuildingView()
+
+    private var cancelable: Cancelable? = null
+    private val highlightedLandmarks = arrayListOf<String>()
 
     /**
      * Debug tool used to play, pause and seek route progress events that can be used to produce mocked location updates along the route.
@@ -520,12 +542,20 @@ class TurnByTurnExperienceActivity : AppCompatActivity() {
         routeArrowView = MapboxRouteArrowView(routeArrowOptions)
 
         // load map style
-        binding.mapView.getMapboxMap().loadStyleUri(NavigationStyles.NAVIGATION_DAY_STYLE) {
+        binding.mapView.getMapboxMap().loadStyleUri(NavigationStyles.NAVIGATION_DAY_STYLE) { style ->
             // add long click listener that search for a route to the clicked destination
             binding.mapView.gestures.addOnMapLongClickListener { point ->
                 findRoute(point)
                 true
             }
+
+            binding.mapView.gestures.addOnMapClickListener { point ->
+                highlightBuildings(point, style)
+                highlightLandmarks(point)
+                true
+            }
+
+            addLandmarksLayer(style)
         }
 
         // initialize view interactions
@@ -557,6 +587,8 @@ class TurnByTurnExperienceActivity : AppCompatActivity() {
         routeLineView.cancel()
         speechApi.cancel()
         voiceInstructionsPlayer.shutdown()
+        buildingsApi.cancel()
+        cancelable?.cancel()
     }
 
     private fun initNavigation() {
@@ -670,5 +702,75 @@ class TurnByTurnExperienceActivity : AppCompatActivity() {
         binding.maneuverView.visibility = View.INVISIBLE
         binding.routeOverview.visibility = View.INVISIBLE
         binding.tripProgressCard.visibility = View.INVISIBLE
+    }
+
+    private fun addLandmarksLayer(style: Style) {
+        val sourceParams = hashMapOf(
+            "type" to Value("batched-model"),
+            "url" to Value("mapbox://mapbox.mbx-3dbuildings"),
+            "maxzoom" to Value(14L),
+            "minzoom" to Value(8L),
+        )
+        style.addStyleSource(LANDMARKS_SOURCE_ID, Value(sourceParams))
+
+        val paintParams = hashMapOf(
+            "model-scale" to interpolate {
+                linear()
+                zoom()
+                stop(key = 12.0) { literal(listOf(0.0, 0.0, 0.0)) }
+                stop(key = 14.0) { literal(listOf(1.0, 1.0, 1.0)) }
+            },
+            "model-opacity" to Value(0.85),
+            "model-color" to switchCase {
+                boolean {
+                    featureState { literal(LANDMARK_HOVER_FEATURE) }
+                    literal(value = false)
+                }
+                rgb(red = 242.0, green = 122.6, blue = 108.8) // highlighted landmark color
+                rgb(red = 242.0, green = 242.0, blue = 242.0) // default landmark color
+            },
+        )
+        val layerParams = hashMapOf(
+            "id" to Value(LANDMARKS_LAYER_ID),
+            "type" to Value("model"),
+            "source" to Value(LANDMARKS_SOURCE_ID),
+            "paint" to Value(paintParams),
+        )
+        style.addStyleLayer(Value(layerParams), LayerPosition("road-label-navigation", null, null))
+    }
+
+    private fun highlightBuildings(point: Point, style: Style) {
+        buildingsApi.cancel()
+        buildingView.removeBuildingHighlight(style)
+        buildingsApi.queryBuildingToHighlight(point) { result ->
+            result.onValue { buildingView.highlightBuilding(style, it.buildings) }
+        }
+    }
+
+    private fun highlightLandmarks(point: Point) {
+        val mapboxMap = binding.mapView.getMapboxMap()
+
+        cancelable?.cancel()
+        for (featureId in highlightedLandmarks) {
+            setLandmarkHoverState(mapboxMap, featureId, state = false)
+        }
+        highlightedLandmarks.clear()
+
+        val geometry = RenderedQueryGeometry(mapboxMap.pixelForCoordinate(point))
+        val options = RenderedQueryOptions(listOf(LANDMARKS_LAYER_ID), literal(true))
+        cancelable = mapboxMap.queryRenderedFeatures(geometry, options) { result ->
+            result.onValue { landmarks ->
+                for (landmark in landmarks) {
+                    val featureId = landmark.feature.id() ?: continue
+                    setLandmarkHoverState(mapboxMap, featureId, state = true)
+                    highlightedLandmarks.add(featureId)
+                }
+            }
+        }
+    }
+
+    private fun setLandmarkHoverState(mapboxMap: MapboxMap, featureId: String, state: Boolean) {
+        val featureState = Value(hashMapOf(LANDMARK_HOVER_FEATURE to Value(state)))
+        mapboxMap.setFeatureState(LANDMARKS_SOURCE_ID, featureId = featureId, state = featureState)
     }
 }
