@@ -49,9 +49,13 @@ android {
     }
 }
 
+
 dependencies {
     // Mapbox Navigation Android Auto SDK
-    implementation("com.mapbox.navigation:ui-androidauto:0.22.0")
+    implementation("com.mapbox.navigation:ui-androidauto:0.22.0") {
+        exclude group: 'com.mapbox.common', module: 'okhttp'
+    }
+    implementation("com.mapbox.navigation:mapgpt-core:0.4.0")
 
     // Android Automotive library
     // https://developer.android.com/jetpack/androidx/releases/car-app

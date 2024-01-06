@@ -16,8 +16,27 @@ buildscript {
                 }
             }
         }
+        // After upgrading to AGP 8.0 the MapGPT shared compilation against the old gradle tools
+        // has been broken - https://mapbox.atlassian.net/browse/NA-1683.
+        // For example, GM Israel uses these tools 'com.android.tools.build:gradle:7.1.2'
+        // to build the app on top of Dash SDK. They run into 'Sealed Class' issue,
+        // https://issuetracker.google.com/issues/227160052#comment37, which should be resolved
+        // in AGP 8.2/ Android Studio Hedgehog. Once we migrate to the mentioned AGP
+        // please remove this workaround.
+        maven {
+            url = uri("https://storage.googleapis.com/r8-releases/raw")
+        }
     }
     dependencies {
+        // After upgrading to AGP 8.0 the MapGPT shared compilation against the old gradle tools
+        // has been broken - https://mapbox.atlassian.net/browse/NA-1683.
+        // For example, GM Israel uses these tools 'com.android.tools.build:gradle:7.1.2'
+        // to build the app on top of Dash SDK. They run into 'Sealed Class' issue,
+        // https://issuetracker.google.com/issues/227160052#comment37, which should be resolved
+        // in AGP 8.2/ Android Studio Hedgehog. Once we migrate to the mentioned AGP
+        // please remove this workaround.
+        classpath("com.android.tools:r8:8.2.24")
+
         classpath 'com.android.tools.build:gradle:7.3.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.7.21"
         classpath "com.mapbox.gradle.plugins:access-token:0.4.0"

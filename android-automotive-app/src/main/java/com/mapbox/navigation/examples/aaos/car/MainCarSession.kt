@@ -8,6 +8,7 @@ import androidx.car.app.Screen
 import androidx.car.app.Session
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import com.mapbox.android.core.permissions.PermissionsManager
 import com.mapbox.androidauto.MapboxCarContext
 import com.mapbox.androidauto.deeplink.GeoDeeplinkNavigateAction
@@ -25,10 +26,15 @@ import com.mapbox.maps.extension.androidauto.mapboxMapInstaller
 import com.mapbox.maps.extension.style.style
 import com.mapbox.navigation.base.ExperimentalPreviewMapboxNavigationAPI
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
+import com.mapbox.navigation.examples.aaos.ExampleActionStripProvider
+import com.mapbox.navigation.examples.aaos.ExampleMapGptCarManager
 import com.mapbox.navigation.examples.aaos.ExamplePermissionScreen
+import com.mapbox.navigation.examples.aaos.R
 import com.mapbox.navigation.ui.maps.NavigationStyles
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
-@OptIn(MapboxExperimental::class)
+@OptIn(MapboxExperimental::class, ExperimentalPreviewMapboxNavigationAPI::class)
 class MainCarSession : Session() {
 
     // The MapboxCarMapLoader will automatically load the map with night and day styles.
@@ -44,7 +50,6 @@ class MainCarSession : Session() {
         .install()
 
     // Prepare an AndroidAuto experience with MapboxCarContext.
-    @OptIn(ExperimentalPreviewMapboxNavigationAPI::class)
     private val mapboxCarContext = MapboxCarContext(lifecycle, mapboxCarMap)
         .prepareScreens()
         .apply {
@@ -66,6 +71,18 @@ class MainCarSession : Session() {
                 MapboxNavigationApp.registerObserver(carTripSessionManager)
                 carTripSessionManager.requestPermissions(carContext)
                 checkLocationPermissions()
+
+                val mapGptCarManager = ExampleMapGptCarManager(
+                    carContext,
+                    mapboxAccessToken = carContext.getString(R.string.mapbox_access_token),
+                )
+                mapGptCarManager.userInputOwner.state.onEach {
+                    Log.i(TAG, "userInputOwner.state.onEach: $it")
+                }.launchIn(lifecycleScope)
+
+                mapboxCarContext.customize {
+                    actionsStripProvider = ExampleActionStripProvider(mapGptCarManager.userInputOwner)
+                }
             }
 
             override fun onDestroy(owner: LifecycleOwner) {
