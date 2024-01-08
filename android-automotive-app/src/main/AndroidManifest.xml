@@ -3,6 +3,8 @@
     package="com.mapbox.navigation.examples.aaos">
     <uses-permission android:name="androidx.car.app.NAVIGATION_TEMPLATES"/>
     <uses-permission android:name="androidx.car.app.ACCESS_SURFACE"/>
+    <uses-permission android:name="androidx.car.app.CAR_LAUNCHER"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:name=".ExampleApplication"
         android:allowBackup="true"

@@ -11,7 +11,8 @@ class CarLocationPermissions {
 
     private val locationPermissions = listOf(
         Manifest.permission.ACCESS_COARSE_LOCATION,
-        Manifest.permission.ACCESS_FINE_LOCATION
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.RECORD_AUDIO,
     )
 
     private val _grantedState = MutableStateFlow(false)

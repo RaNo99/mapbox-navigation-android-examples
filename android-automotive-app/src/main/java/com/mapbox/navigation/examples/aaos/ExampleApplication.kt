@@ -15,5 +15,7 @@ class ExampleApplication : Application() {
                 .accessToken(getString(R.string.mapbox_access_token))
                 .build()
         ).attachAllActivities(this)
+
+        Log.currentLevel = LogLevel.Debug
     }
 }
