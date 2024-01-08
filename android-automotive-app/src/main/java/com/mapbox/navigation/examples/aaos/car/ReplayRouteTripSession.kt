@@ -37,9 +37,10 @@ internal class ReplayRouteTripSession : UIComponent() {
                 logAndroidAuto("ReplayRouteTripSession ${result.navigationRoutes.size}")
                 if (result.navigationRoutes.isEmpty()) {
                     mapboxReplayer.clearEvents()
-                    mapboxNavigation.resetTripSession()
-                    mapboxReplayer.pushRealLocation(context, 0.0)
-                    mapboxReplayer.play()
+                    mapboxNavigation.resetTripSession {
+                        mapboxReplayer.pushRealLocation(context, 0.0)
+                        mapboxReplayer.play()
+                    }
                 }
             }.also { mapboxNavigation.registerRoutesObserver(it) }
 

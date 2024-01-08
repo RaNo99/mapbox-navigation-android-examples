@@ -54,8 +54,18 @@ dependencies {
     // Mapbox Navigation Android Auto SDK
     implementation("com.mapbox.navigation:ui-androidauto:0.22.0") {
         exclude group: 'com.mapbox.common', module: 'okhttp'
+        //  Caused by: androidx.startup.StartupException: java.lang.UnsatisfiedLinkError
+        //  /lib/x86_64/libSearchCore.so"...
+        exclude group: 'com.mapbox.search', module: 'mapbox-search-android'
+        exclude group: 'com.mapbox.navigation', module: 'android'
+    }
+
+    implementation("com.mapbox.maps:android:11.0.0")
+    implementation("com.mapbox.navigation:android:2.17.8") {
+        exclude group: 'com.mapbox.common', module: 'okhttp'
     }
     implementation("com.mapbox.navigation:mapgpt-core:0.4.0")
+    implementation("com.mapbox.common:common:24.1.0-beta.2")
 
     // Android Automotive library
     // https://developer.android.com/jetpack/androidx/releases/car-app
